@@ -16,6 +16,7 @@
 #import "AwfulThreadCell.h"
 #import "AwfulThreadTag.h"
 #import "AwfulThreadTagLoader.h"
+#import "AwfulPostsTableViewController.h"
 #import <MRProgress/MRProgressOverlayView.h>
 #import <SVPullToRefresh/SVPullToRefresh.h>
 
@@ -313,7 +314,7 @@ static NSString * const ThreadCellIdentifier = @"Thread Cell";
     [self dismissViewControllerAnimated:YES completion:nil];
 }
 
-- (void)showPostsViewController:(AwfulPostsViewController *)postsViewController
+- (void)showPostsViewController:(UIViewController *)postsViewController
 {
     if (self.splitViewController) {
         [self.splitViewController setDetailViewController:[postsViewController enclosingNavigationController]
@@ -330,8 +331,8 @@ static NSString * const ThreadCellIdentifier = @"Thread Cell";
 {
     NSFetchedResultsController *fetchedResultsController = self.threadDataSource.fetchedResultsController;
     AwfulThread *thread = [fetchedResultsController objectAtIndexPath:indexPath];
-    AwfulPostsViewController *postsViewController = [[AwfulPostsViewController alloc] initWithThread:thread];
-    postsViewController.restorationIdentifier = @"AwfulPostsViewController";
+    AwfulPostsTableViewController *postsViewController = [[AwfulPostsTableViewController alloc] initWithThread:thread];
+    postsViewController.restorationIdentifier = @"AwfulPostsTableViewController";
     
     // SA: For an unread thread, the Forums will interpret "next unread page" to mean "last page", which is not very helpful.
     [postsViewController loadPage:(thread.beenSeen ? AwfulThreadPageNextUnread : 1) updatingCache:YES];
