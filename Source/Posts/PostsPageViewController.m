@@ -60,6 +60,8 @@
 
 @property (copy, nonatomic) NSArray *posts;
 
+//@property (strong,nonatomic) NSUserActivity* userActivity;
+
 @end
 
 @implementation PostsPageViewController
@@ -75,6 +77,8 @@
 - (void)dealloc
 {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
+    if (self.userActivity)
+        [self.userActivity invalidate];
 }
 
 - (id)initWithThread:(AwfulThread *)thread author:(AwfulUser *)author
@@ -107,12 +111,29 @@
                                                  name:AwfulSettingsDidChangeNotification
                                                object:nil];
     
+
     return self;
 }
 
 - (id)initWithThread:(AwfulThread *)thread
 {
     return [self initWithThread:thread author:nil];
+}
+
+- (void)setupUserActivity
+{
+    NSUserActivity* current = self.userActivity;
+    if (!current) {
+        current = [[NSUserActivity alloc] initWithActivityType:BrowsingPostsActivityType];
+        current.title = @"test";
+        //_userActivity.delegate = self;
+    }
+    
+    #warning get url from forums client
+    current.webpageURL = [NSURL URLWithString:[NSString stringWithFormat:@"http://forums.somethingawful.com/showthread.php?threadid=%@&perpage=40&pagenumber=%i", self.thread.threadID, (int)self.page + 1]];
+    NSLog(@"Set user activity: %@", current.webpageURL);
+    [current setNeedsSave:YES];
+    [self setUserActivity:current];
 }
 
 - (NSInteger)numberOfPages
@@ -126,6 +147,9 @@
 
 - (void)loadPage:(NSInteger)page updatingCache:(BOOL)updateCache
 {
+    [self setupUserActivity];
+    
+    
     [self.networkOperation cancel];
     self.networkOperation = nil;
     
@@ -1141,5 +1165,6 @@ static NSString * const ReplyViewControllerKey = @"AwfulReplyViewController";
 static NSString * const MessageViewControllerKey = @"AwfulMessageViewController";
 static NSString * const AdvertisementHTMLKey = @"AwfulAdvertisementHTML";
 static NSString * const ScrolledFractionOfContentKey = @"AwfulScrolledFractionOfContentSize";
+static NSString * const BrowsingPostsActivityType = @"com.awfulapp.Awful.browsing.posts";
 
 @end
