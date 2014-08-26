@@ -9,7 +9,7 @@
 #import "AwfulFetchedResultsControllerDataSource.h"
 #import <UIKit/UIKit.h>
 
-@interface AwfulPostsTableViewController : AwfulTableViewController
+@interface AwfulPostsTableViewController : AwfulTableViewController <AwfulFetchedResultsControllerDataSourceDelegate>
 
 /**
  * Designated initializer.
@@ -58,4 +58,8 @@
  */
 - (void)scrollPostToVisible:(AwfulPost *)post;
 
+/**
+ * The managed object context sourcing the bookmarked threads.
+ */
+@property (readonly, strong, nonatomic) NSManagedObjectContext *managedObjectContext;
 @end

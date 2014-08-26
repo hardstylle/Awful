@@ -37,6 +37,7 @@
 #import <MRProgress/MRProgressOverlayView.h>
 #import <SVPullToRefresh/SVPullToRefresh.h>
 #import <WebViewJavascriptBridge.h>
+#import <DTCoreText/DTCoreText.h>
 
 @interface AwfulPostsTableViewController () <AwfulComposeTextViewControllerDelegate, UIGestureRecognizerDelegate, UIViewControllerRestoration, UIWebViewDelegate>
 
@@ -61,7 +62,7 @@
 
 @property (strong,nonatomic) AwfulFetchedResultsControllerDataSource *dataSource;
 
-@property (copy, nonatomic) NSArray *posts;
+//@property (copy, nonatomic) NSArray *posts;
 @end
 
 @implementation AwfulPostsTableViewController
@@ -85,6 +86,7 @@
     self = [super initWithNibName:nil bundle:nil];
     if (!self) return nil;
     
+    _managedObjectContext = thread.managedObjectContext;
     _thread = thread;
     _author = author;
     self.restorationClass = self.class;
@@ -102,6 +104,24 @@
                            self.forwardItem,
                            [UIBarButtonItem awful_flexibleSpace],
                            self.actionsItem ];
+    
+    [self.tableView registerClass:[UITableViewHeaderFooterView class] forHeaderFooterViewReuseIdentifier:@"AwfulPostHeader"];
+    
+    _dataSource = [[AwfulFetchedResultsControllerDataSource alloc]
+                   initWithTableView:self.tableView
+                   reuseIdentifier:@"AwfulPostCell"];
+    
+    _fetchRequest = [[NSFetchRequest alloc] initWithEntityName:[AwfulPost entityName]];
+    _fetchRequest.predicate = [NSPredicate predicateWithFormat:@"thread = %@", self.thread];
+    _fetchRequest.sortDescriptors = @[[NSSortDescriptor sortDescriptorWithKey:@"postDate" ascending:YES]];
+    _fetchRequest.fetchBatchSize = 40;
+    _dataSource.delegate = self;
+    _dataSource.fetchedResultsController = [[NSFetchedResultsController alloc]
+                                            initWithFetchRequest:_fetchRequest
+                                            managedObjectContext:self.managedObjectContext
+                                            sectionNameKeyPath:@"postID"
+                                            cacheName:nil];
+    _dataSource.updatesTableView = YES;
     
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(settingsDidChange:)
@@ -179,7 +199,6 @@
                                  }
                                  
                                  if (posts.count > 0) {
-                                     self.posts = posts;
                                      AwfulPost *anyPost = posts.lastObject;
                                      if (self.author) {
                                          self.page = anyPost.singleUserPage;
@@ -202,12 +221,6 @@
                                      _scrollToFractionAfterLoading = self.webView.awful_fractionalContentOffset;
                                  }
                                  
-                                 //[self renderPosts];
-                                 
-                                 for(int i=0; i<40; i++) {
-                                     [self configureCell:[self.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:i inSection:0]
-                                                          ] withObject:self.posts[i]];
-                                 }
                                  
                                  [self updateUserInterface];
                                  
@@ -216,12 +229,15 @@
                                      self.thread.seenPosts = lastPost.threadIndex;
                                  }
                                  
-                                 [self.postsView.webView.scrollView.pullToRefreshView stopAnimating];
                              }];
 }
 
 - (void)scrollPostToVisible:(AwfulPost*)topPost
 {
+    NSIndexPath *path = [self.dataSource.fetchedResultsController indexPathForObject:topPost];
+    [self.tableView scrollToRowAtIndexPath:path
+                          atScrollPosition:(UITableViewScrollPositionTop)
+                                  animated:YES];
 }
 
 - (AwfulTheme *)theme
@@ -468,7 +484,7 @@
 - (void)refetchPosts
 {
     if (!self.thread || self.page < 1) {
-        self.posts = nil;
+        //self.posts = nil;
         return;
     }
     NSError *error;
@@ -477,7 +493,7 @@
     if (!posts) {
         NSLog(@"%s error fetching posts: %@", __PRETTY_FUNCTION__, error);
     }
-    self.posts = posts;
+    //self.posts = posts;
 }
 
 - (NSFetchRequest*) fetchRequest {
@@ -590,89 +606,6 @@
     [[AwfulAppDelegate instance] openAwfulURL:[NSURL URLWithString:url]];
 }
 
-- (void)showHiddenSeenPosts
-{
-    NSMutableArray *HTMLFragments = [NSMutableArray new];
-    NSUInteger end = self.hiddenPosts;
-    self.hiddenPosts = 0;
-    for (NSUInteger i = 0; i < end; i++) {
-        NSString *HTML = [self renderedPostAtIndex:i];
-        [HTMLFragments addObject:HTML];
-    }
-    NSString *HTML = [HTMLFragments componentsJoinedByString:@"\n"];
-    [_webViewJavaScriptBridge callHandler:@"prependPosts" data:HTML];
-}
-
-- (void)scrollToBottom
-{
-    UIScrollView *scrollView = self.postsView.webView.scrollView;
-    [scrollView scrollRectToVisible:CGRectMake(0, scrollView.contentSize.height - 1, 1, 1) animated:YES];
-}
-
-- (void)didLongPressOnPostsView:(UILongPressGestureRecognizer *)sender
-{
-    if (sender.state != UIGestureRecognizerStateBegan) return;
-    
-    CGPoint location = [sender locationInView:self.postsView.webView];
-    UIScrollView *scrollView = self.webView.scrollView;
-    location.y -= scrollView.contentInset.top;
-    CGFloat offsetY = scrollView.contentOffset.y;
-    if (offsetY < 0) {
-        location.y += offsetY;
-    }
-    NSDictionary *data = @{ @"x": @(location.x), @"y": @(location.y) };
-    [_webViewJavaScriptBridge callHandler:@"interestingElementsAtPoint" data:data responseCallback:^(NSDictionary *elementInfo) {
-        if (elementInfo.count == 0) return;
-        
-        NSURL *imageURL = [NSURL URLWithString:elementInfo[@"spoiledImageURL"] relativeToURL:[AwfulForumsClient client].baseURL];
-        if (elementInfo[@"spoiledLink"]) {
-            NSDictionary *linkInfo = elementInfo[@"spoiledLink"];
-            NSURL *URL = [NSURL URLWithString:linkInfo[@"URL"] relativeToURL:[AwfulForumsClient client].baseURL];
-            AwfulActionSheet *sheet = [AwfulActionSheet actionSheetOpeningURL:URL fromViewController:self addingActions:^(AwfulActionSheet *sheet) {
-                if (imageURL) {
-                    [sheet addButtonWithTitle:@"Show Image" block:^{
-                        [self previewImageAtURL:imageURL];
-                    }];
-                }
-            }];
-            sheet.title = URL.absoluteString;
-            CGRect rect = [self.webView awful_rectForElementBoundingRect:linkInfo[@"rect"]];
-            [sheet showFromRect:rect inView:self.view animated:YES];
-        } else if (imageURL) {
-            [self previewImageAtURL:imageURL];
-        } else if (elementInfo[@"spoiledVideo"]) {
-            NSDictionary *videoInfo = elementInfo[@"spoiledVideo"];
-            NSURL *URL = [NSURL URLWithString:videoInfo[@"URL"] relativeToURL:[AwfulForumsClient client].baseURL];
-            NSURL *safariURL;
-            if ([URL.host hasSuffix:@"youtube-nocookie.com"]) {
-                NSString *youtubeVideoID = URL.lastPathComponent;
-                safariURL = [NSURL URLWithString:[NSString stringWithFormat:
-                                                  @"http://www.youtube.com/watch?v=%@", youtubeVideoID]];
-            } else if ([URL.host hasSuffix:@"player.vimeo.com"]) {
-                NSString *vimeoVideoID = URL.lastPathComponent;
-                safariURL = [NSURL URLWithString:[NSString stringWithFormat:
-                                                  @"http://vimeo.com/%@", vimeoVideoID]];
-            }
-            if (!safariURL) return;
-            
-            AwfulActionSheet *sheet = [AwfulActionSheet new];
-            
-            void (^openInSafariOrYouTube)(void) = ^{ [[UIApplication sharedApplication] openURL:safariURL]; };
-            if ([[UIApplication sharedApplication] canOpenURL:[NSURL URLWithString:@"youtube://"]]) {
-                [sheet addButtonWithTitle:@"Open in YouTube" block:openInSafariOrYouTube];
-            } else {
-                [sheet addButtonWithTitle:@"Open in Safari" block:openInSafariOrYouTube];
-            }
-            
-            [sheet addCancelButtonWithTitle:@"Cancel"];
-            
-            CGRect rect = [self.webView awful_rectForElementBoundingRect:videoInfo[@"rect"]];
-            [sheet showFromRect:rect inView:self.webView animated:YES];
-        } else {
-            NSLog(@"%s unexpected interesting elements: %@", __PRETTY_FUNCTION__, elementInfo);
-        }
-    }];
-}
 
 - (void)previewImageAtURL:(NSURL *)URL
 {
@@ -695,28 +628,6 @@
     return HTML;
 }
 
-- (void)readIgnoredPostAtIndex:(NSUInteger)index
-{
-    AwfulPost *post = self.posts[index];
-    __weak __typeof__(self) weakSelf = self;
-    [[AwfulForumsClient client] readIgnoredPost:post andThen:^(NSError *error) {
-        __typeof__(self) self = weakSelf;
-        if (error) {
-            [AwfulAlertView showWithTitle:@"Network Error" error:error buttonTitle:@"OK"];
-            return;
-        }
-        
-        // Grabbing the index here ensures we're still on the same page as the post to replace, and that we have the right post index (in case it got hidden).
-        NSInteger i = [self.posts indexOfObject:post];
-        if (i == NSNotFound) return;
-        i -= self.hiddenPosts;
-        if (i >= 0) {
-            NSDictionary *data = @{ @"index": @(i),
-                                    @"HTML": [self renderedPostAtIndex:index] };
-            [_webViewJavaScriptBridge callHandler:@"postHTMLAtIndex" data:data];
-        }
-    }];
-}
 
 - (void)didTapUserHeaderWithRect:(CGRect)rect forPostAtIndex:(NSUInteger)postIndex
 {
@@ -876,6 +787,10 @@
     return nil;//self.postsView.webView;
 }
 
+- (NSArray*)posts {
+    return self.dataSource.fetchedResultsController.fetchedObjects;
+}
+
 #pragma mark - UIViewController
 
 - (void)setTitle:(NSString *)title
@@ -897,14 +812,15 @@
 {
     [super viewDidLoad];
     
+
+
+    [self.tableView registerClass:[UITableViewCell class] forCellReuseIdentifier:@"AwfulPostCell"];
 //    
 //    UILongPressGestureRecognizer *longPress = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(didLongPressOnPostsView:)];
 //    longPress.delegate = self;
 //    [self.webView addGestureRecognizer:longPress];
     
-    _webViewNetworkActivityIndicatorManager = [[AwfulWebViewNetworkActivityIndicatorManager alloc] initWithNextDelegate:self];
-    
-        [[NSNotificationCenter defaultCenter] addObserver:self
+    [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(externalStylesheetDidUpdate:)
                                                  name:AwfulPostsViewExternalStylesheetLoaderDidUpdateNotification
                                                object:nil];
@@ -923,47 +839,48 @@
 }
 
 #pragma mark UITableViewControllerDelegate
-//-(NSInteger) numberOfSectionsInTableView:(UITableView *)tableView {
-//    return 1;
-//}
-//
-//-(NSInteger) tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-//    return 40;
-//}
-
 -(CGFloat) tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
-    return 300;
+    AwfulPost* post = self.posts[indexPath.section];
+    
+    CGFloat widthValue = tableView.frame.size.width;
+    CGRect frame = [post.innerHTML boundingRectWithSize:CGSizeMake(widthValue, CGFLOAT_MAX)
+                                      options:NSStringDrawingUsesLineFragmentOrigin
+                                   attributes:nil
+                                      context:nil];
+    return frame.size.height+1;
+    
 }
 
--(UITableViewCell*) tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
+- (UIView*)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section
 {
+    UITableViewCell *header = [tableView dequeueReusableHeaderFooterViewWithIdentifier:@"AwfulPostHeader"];
     
-    UITableViewCell* cell = [tableView dequeueReusableCellWithIdentifier:@"postCell"];
-    if (!cell)
-        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
-                                               reuseIdentifier:@"postCell"];
+    AwfulPost *post = [self.dataSource.fetchedResultsController objectAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:section]];
     
-    
-    [self configureCell:cell withObject:nil];
-    return cell;
+    header.textLabel.text = post.author.username;
+    return header;
+}
+
+- (CGFloat) tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
+    return 50;
 }
 
 - (void)configureCell:(UITableViewCell*)cell withObject:(AwfulPost*) post
 {
     if (post) {
-        AwfulPostViewModel *viewModel = [[AwfulPostViewModel alloc] initWithPost:post];
-        NSString *html = [GRMustacheTemplate renderObject:viewModel fromResource:@"Post" bundle:nil error:nil];
+        //AwfulPostViewModel *viewModel = [[AwfulPostViewModel alloc] initWithPost:post];
+        //NSString *html = [GRMustacheTemplate renderObject:viewModel fromResource:@"Post" bundle:nil error:nil];
         
-        NSAttributedString* text = [[NSAttributedString alloc] initWithData:[html dataUsingEncoding:NSUTF8StringEncoding]
-                                                                    options:@{NSDocumentTypeDocumentAttribute: NSHTMLTextDocumentType,
-                                                                              NSCharacterEncodingDocumentAttribute: @(NSUTF8StringEncoding)}
-                                                         documentAttributes:nil
-                                                                      error:nil];
-        cell.textLabel.attributedText = text;
+        //NSData *data = [post.innerHTML dataUsingEncoding:NSUTF8StringEncoding];
+        //NSAttributedString *text = [[NSAttributedString alloc] initWithHTMLData:data
+        //                                                     documentAttributes:NULL];
+        
+        cell.textLabel.text = post.innerHTML;
         cell.textLabel.numberOfLines = 0;
         return;
     }
-    cell.textLabel.text = @"aaaa";
+    
+    cell.textLabel.text = @"no post?";
 }
 
 

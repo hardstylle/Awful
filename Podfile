@@ -13,6 +13,7 @@ pod 'PocketAPI', '1.0.2'
 pod 'PSMenuItem', '0.0.1'
 pod 'SVPullToRefresh', :head
 pod 'WebViewJavascriptBridge', :git => 'https://github.com/marcuswestin/WebViewJavascriptBridge.git', :tag => 'v4.1.2'
+pod 'DTCoreText', :head
 
 target :ScrapingTests, :exclusive => true do
   pod 'HTMLReader', :git => "https://github.com/nolanw/HTMLReader"

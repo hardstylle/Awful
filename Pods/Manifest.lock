@@ -18,6 +18,17 @@ PODS:
   - AFNetworking/UIKit (2.2.4):
     - AFNetworking/NSURLConnection
     - AFNetworking/NSURLSession
+  - DTCoreText (HEAD based on 1.6.13):
+    - DTFoundation/Core (~> 1.7.1)
+    - DTFoundation/DTAnimatedGIF (~> 1.7.1)
+    - DTFoundation/DTHTMLParser (~> 1.7.1)
+    - DTFoundation/UIKit (~> 1.7.1)
+  - DTFoundation/Core (1.7.2)
+  - DTFoundation/DTAnimatedGIF (1.7.2)
+  - DTFoundation/DTHTMLParser (1.7.2):
+    - DTFoundation/Core
+  - DTFoundation/UIKit (1.7.2):
+    - DTFoundation/Core
   - GRMustache (6.9.2):
     - JRSwizzle (~> 1.0)
   - HTMLReader (0.5.5)
@@ -49,6 +60,7 @@ PODS:
 
 DEPENDENCIES:
   - AFNetworking (= 2.2.4)
+  - DTCoreText (HEAD)
   - GRMustache (= 6.9.2)
   - HTMLReader (= 0.5.5)
   - HTMLReader (from `https://github.com/nolanw/HTMLReader`)
@@ -72,6 +84,8 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   AFNetworking: ab63e259fe91eef4519b371ef0a4955af0e73e64
+  DTCoreText: 84eb8ba2e70448fdd9d837540e371f9f587b65ba
+  DTFoundation: 126729614911ae7dbab3dcc1c078f189943bee66
   GRMustache: 2898651f8e5350df26c64196b347524508cebb86
   HTMLReader: ac0aac91128d4a222741c58a63fe7e6940fb10cd
   ImgurAnonymousAPIClient: a59b74c3500b29b6d3b08c61c1304b65085f7aac
