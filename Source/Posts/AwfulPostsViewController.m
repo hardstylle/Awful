@@ -804,7 +804,7 @@
     
     actionViewController.items = items;
     actionViewController.popoverPositioningBlock = ^(CGRect *sourceRect, UIView * __autoreleasing *sourceView) {
-        NSString *rectString = [self.webView awful_evalJavaScript:@"HeaderRectForPostAtIndex(%lu, true)", (unsigned long)postIndex];
+        NSString *rectString = [self.webView awful_evalJavaScript:@"HeaderRectForPostAtIndex(%lu)", (unsigned long)postIndex];
         *sourceRect = [self.webView awful_rectForElementBoundingRect:rectString];
         *sourceView = self.webView;
     };
