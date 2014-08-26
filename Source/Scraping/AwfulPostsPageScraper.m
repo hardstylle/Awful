@@ -226,7 +226,7 @@
                                             [table awful_firstNodeMatchingCachedSelector:@"td.postbody"]);
             if (postBodyElement) {
                 if (post.innerHTML.length == 0 || !post.ignored) {
-                    post.innerHTML = postBodyElement.innerHTML;
+                    post.innerHTML = postBodyElement.innerHTML;   
                 }
             }
         }}

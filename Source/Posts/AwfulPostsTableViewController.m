@@ -32,12 +32,14 @@
 #import "AwfulSettings.h"
 #import "AwfulThemeLoader.h"
 #import "AwfulWebViewNetworkActivityIndicatorManager.h"
+#import "AwfulPostHeaderView.h"
+#import "AwfulPostFooterView.h"
 #import <Crashlytics/Crashlytics.h>
 #import <GRMustache.h>
 #import <MRProgress/MRProgressOverlayView.h>
 #import <SVPullToRefresh/SVPullToRefresh.h>
 #import <WebViewJavascriptBridge.h>
-#import <DTCoreText/DTCoreText.h>
+//#import <DTCoreText/DTCoreText.h>
 
 @interface AwfulPostsTableViewController () <AwfulComposeTextViewControllerDelegate, UIGestureRecognizerDelegate, UIViewControllerRestoration, UIWebViewDelegate>
 
@@ -105,19 +107,13 @@
                            [UIBarButtonItem awful_flexibleSpace],
                            self.actionsItem ];
     
-    [self.tableView registerClass:[UITableViewHeaderFooterView class] forHeaderFooterViewReuseIdentifier:@"AwfulPostHeader"];
-    
     _dataSource = [[AwfulFetchedResultsControllerDataSource alloc]
                    initWithTableView:self.tableView
                    reuseIdentifier:@"AwfulPostCell"];
-    
-    _fetchRequest = [[NSFetchRequest alloc] initWithEntityName:[AwfulPost entityName]];
-    _fetchRequest.predicate = [NSPredicate predicateWithFormat:@"thread = %@", self.thread];
-    _fetchRequest.sortDescriptors = @[[NSSortDescriptor sortDescriptorWithKey:@"postDate" ascending:YES]];
-    _fetchRequest.fetchBatchSize = 40;
+ 
     _dataSource.delegate = self;
     _dataSource.fetchedResultsController = [[NSFetchedResultsController alloc]
-                                            initWithFetchRequest:_fetchRequest
+                                            initWithFetchRequest:[self fetchRequest]
                                             managedObjectContext:self.managedObjectContext
                                             sectionNameKeyPath:@"postID"
                                             cacheName:nil];
@@ -229,6 +225,7 @@
                                      self.thread.seenPosts = lastPost.threadIndex;
                                  }
                                  
+                                 [self refetchPosts];
                              }];
 }
 
@@ -488,16 +485,19 @@
         return;
     }
     NSError *error;
-    NSArray *posts = [self.thread.managedObjectContext executeFetchRequest:[self fetchRequest]
-                                                                     error:&error];
-    if (!posts) {
+    self.dataSource.fetchedResultsController.fetchRequest.predicate = [self fetchRequest].predicate;
+    
+    [self.dataSource.fetchedResultsController performFetch:&error];
+    if (error) {
         NSLog(@"%s error fetching posts: %@", __PRETTY_FUNCTION__, error);
     }
+    [self updateUserInterface];
+    [self.tableView reloadData];
     //self.posts = posts;
 }
 
 - (NSFetchRequest*) fetchRequest {
-    if (_fetchRequest) return _fetchRequest;
+    //if (_fetchRequest) return _fetchRequest;
     
     NSFetchRequest *fetchRequest = [NSFetchRequest fetchRequestWithEntityName:[AwfulPost entityName]];
     NSInteger lowIndex = (self.page - 1) * 40 + 1;
@@ -791,6 +791,14 @@
     return self.dataSource.fetchedResultsController.fetchedObjects;
 }
 
+- (void)setPage:(AwfulThreadPage)page
+{
+    _page = page;
+    if (page > 0) {
+        _fetchRequest.predicate = [NSPredicate predicateWithFormat:@"threadIndex/40 + 1 = %i", page];
+    }
+}
+
 #pragma mark - UIViewController
 
 - (void)setTitle:(NSString *)title
@@ -812,10 +820,13 @@
 {
     [super viewDidLoad];
     
-
-
     [self.tableView registerClass:[UITableViewCell class] forCellReuseIdentifier:@"AwfulPostCell"];
-//    
+    [self.tableView registerClass:[AwfulPostHeaderView class] forHeaderFooterViewReuseIdentifier:@"AwfulPostHeader"];
+    [self.tableView registerClass:[AwfulPostFooterView class] forHeaderFooterViewReuseIdentifier:@"AwfulPostFooter"];
+    
+    self.tableView.delegate = self;
+    self.tableView.sectionFooterHeight = 40;
+    
 //    UILongPressGestureRecognizer *longPress = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(didLongPressOnPostsView:)];
 //    longPress.delegate = self;
 //    [self.webView addGestureRecognizer:longPress];
@@ -841,24 +852,28 @@
 #pragma mark UITableViewControllerDelegate
 -(CGFloat) tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
     AwfulPost* post = self.posts[indexPath.section];
-    
-    CGFloat widthValue = tableView.frame.size.width;
-    CGRect frame = [post.innerHTML boundingRectWithSize:CGSizeMake(widthValue, CGFLOAT_MAX)
-                                      options:NSStringDrawingUsesLineFragmentOrigin
-                                   attributes:nil
-                                      context:nil];
-    return frame.size.height+1;
-    
+    return [post contentHeightForWidth:self.tableView.contentSize.width];
 }
 
 - (UIView*)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section
 {
-    UITableViewCell *header = [tableView dequeueReusableHeaderFooterViewWithIdentifier:@"AwfulPostHeader"];
+    AwfulPostHeaderView *header = [tableView dequeueReusableHeaderFooterViewWithIdentifier:@"AwfulPostHeader"];
+    
+    AwfulPost *post = [self.dataSource.fetchedResultsController objectAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:section]];
+    header.user = post.author;
+    return header;
+    self.theme.dictionary
+}
+
+
+- (UIView*)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section
+{
+    AwfulPostFooterView *footer = [tableView dequeueReusableHeaderFooterViewWithIdentifier:@"AwfulPostFooter"];
     
     AwfulPost *post = [self.dataSource.fetchedResultsController objectAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:section]];
     
-    header.textLabel.text = post.author.username;
-    return header;
+    footer.Post = post;
+    return footer;
 }
 
 - (CGFloat) tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
@@ -870,13 +885,12 @@
     if (post) {
         //AwfulPostViewModel *viewModel = [[AwfulPostViewModel alloc] initWithPost:post];
         //NSString *html = [GRMustacheTemplate renderObject:viewModel fromResource:@"Post" bundle:nil error:nil];
-        
-        //NSData *data = [post.innerHTML dataUsingEncoding:NSUTF8StringEncoding];
-        //NSAttributedString *text = [[NSAttributedString alloc] initWithHTMLData:data
-        //                                                     documentAttributes:NULL];
-        
-        cell.textLabel.text = post.innerHTML;
+
         cell.textLabel.numberOfLines = 0;
+        cell.textLabel.font = [UIFont systemFontOfSize:12];
+        cell.textLabel.lineBreakMode = NSLineBreakByWordWrapping;
+        cell.textLabel.attributedText = post.content;
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
         return;
     }
     

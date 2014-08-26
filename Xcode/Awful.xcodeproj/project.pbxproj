@@ -249,6 +249,8 @@
 		8C70028A169C6EFA00FC0B78 /* FVGifAnimation.m in Sources */ = {isa = PBXBuildFile; fileRef = 8C700289169C6EFA00FC0B78 /* FVGifAnimation.m */; };
 		8C8813A218492AC80058009E /* mac-watch.png in Resources */ = {isa = PBXBuildFile; fileRef = 8C8813A118492AC70058009E /* mac-watch.png */; };
 		8C9834E2169091CE009F0CD6 /* fyad-bubble.png in Resources */ = {isa = PBXBuildFile; fileRef = 8C9834E1169091CE009F0CD6 /* fyad-bubble.png */; };
+		8CA872BC19ACD3B000BA5424 /* AwfulPostHeaderView.m in Sources */ = {isa = PBXBuildFile; fileRef = 8CA872BB19ACD3B000BA5424 /* AwfulPostHeaderView.m */; };
+		8CA872BF19ACDB9D00BA5424 /* AwfulPostFooterView.m in Sources */ = {isa = PBXBuildFile; fileRef = 8CA872BE19ACDB9D00BA5424 /* AwfulPostFooterView.m */; };
 		8CB2296019A172C600893027 /* AwfulPostsTableViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 8CB2295F19A172C600893027 /* AwfulPostsTableViewController.m */; };
 		8CCA272D16B8C1EF00A4952A /* AwfulRapSheetViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 8CCA272C16B8C1EF00A4952A /* AwfulRapSheetViewController.m */; };
 		8CCD500615B497A900E5893B /* Settings.plist in Resources */ = {isa = PBXBuildFile; fileRef = 8CCD4CC315B497A800E5893B /* Settings.plist */; };
@@ -652,6 +654,11 @@
 		8C700289169C6EFA00FC0B78 /* FVGifAnimation.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = FVGifAnimation.m; sourceTree = "<group>"; };
 		8C8813A118492AC70058009E /* mac-watch.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "mac-watch.png"; sourceTree = "<group>"; };
 		8C9834E1169091CE009F0CD6 /* fyad-bubble.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "fyad-bubble.png"; sourceTree = "<group>"; };
+		8CA872B919ACC4F300BA5424 /* Awful 2.0.9.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Awful 2.0.9.xcdatamodel"; sourceTree = "<group>"; };
+		8CA872BA19ACD3B000BA5424 /* AwfulPostHeaderView.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = AwfulPostHeaderView.h; sourceTree = "<group>"; };
+		8CA872BB19ACD3B000BA5424 /* AwfulPostHeaderView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = AwfulPostHeaderView.m; sourceTree = "<group>"; };
+		8CA872BD19ACDB9D00BA5424 /* AwfulPostFooterView.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = AwfulPostFooterView.h; sourceTree = "<group>"; };
+		8CA872BE19ACDB9D00BA5424 /* AwfulPostFooterView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = AwfulPostFooterView.m; sourceTree = "<group>"; };
 		8CB2295E19A172C600893027 /* AwfulPostsTableViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = AwfulPostsTableViewController.h; sourceTree = "<group>"; };
 		8CB2295F19A172C600893027 /* AwfulPostsTableViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = AwfulPostsTableViewController.m; sourceTree = "<group>"; };
 		8CCA272B16B8C1EF00A4952A /* AwfulRapSheetViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = AwfulRapSheetViewController.h; sourceTree = "<group>"; };
@@ -1219,6 +1226,10 @@
 				1C23A0A4163E6E1D006C7F39 /* PostsView.mustache */,
 				8CB2295E19A172C600893027 /* AwfulPostsTableViewController.h */,
 				8CB2295F19A172C600893027 /* AwfulPostsTableViewController.m */,
+				8CA872BA19ACD3B000BA5424 /* AwfulPostHeaderView.h */,
+				8CA872BB19ACD3B000BA5424 /* AwfulPostHeaderView.m */,
+				8CA872BD19ACDB9D00BA5424 /* AwfulPostFooterView.h */,
+				8CA872BE19ACDB9D00BA5424 /* AwfulPostFooterView.m */,
 			);
 			path = Posts;
 			sourceTree = "<group>";
@@ -1820,6 +1831,7 @@
 				1C5F700417D853AA005ABD6F /* AwfulBasementSidebarViewController.m in Sources */,
 				1C35FB7218301E9500B52724 /* AwfulThreadTag.m in Sources */,
 				1C89A78E18AA084500D75854 /* AwfulSplitViewController.m in Sources */,
+				8CA872BC19ACD3B000BA5424 /* AwfulPostHeaderView.m in Sources */,
 				1CC4526A180B7D3900F5F043 /* AwfulBookmarkedThreadTableViewController.m in Sources */,
 				1C8F0DE5191CF89D00CE8DEE /* AwfulJavaScript.m in Sources */,
 				1C7DFA7817EB58640009F2C6 /* AwfulPageSettingsView.m in Sources */,
@@ -1893,6 +1905,7 @@
 				1CA1EFFC1910424D00E85DB2 /* AwfulPostScraper.m in Sources */,
 				1C3447E1175D9991007377C5 /* AwfulPostViewModel.m in Sources */,
 				1C5F700117D8521F005ABD6F /* AwfulBasementViewController.m in Sources */,
+				8CA872BF19ACDB9D00BA5424 /* AwfulPostFooterView.m in Sources */,
 				1CC0A44B1845FC1300A6F3FE /* AwfulLaunchImageViewController.m in Sources */,
 				1C3447E7175DAAAD007377C5 /* AwfulProfileViewModel.m in Sources */,
 				1C3447EC175E5D78007377C5 /* AwfulLoadingView.m in Sources */,
@@ -2295,12 +2308,13 @@
 		1C5B99B8166FFA4F004C5D0E /* Awful.xcdatamodeld */ = {
 			isa = XCVersionGroup;
 			children = (
+				8CA872B919ACC4F300BA5424 /* Awful 2.0.9.xcdatamodel */,
 				1C8E10451914B5F00010007B /* Awful 2.0.8.xcdatamodel */,
 				833FE47118AE777A0045BC1C /* Awful 2.0.4.xcdatamodel */,
 				1C6AA33318A1F8940094D1E3 /* Awful 2.0.3.xcdatamodel */,
 				1C5F6FF517D738BF005ABD6F /* Awful.xcdatamodel */,
 			);
-			currentVersion = 1C8E10451914B5F00010007B /* Awful 2.0.8.xcdatamodel */;
+			currentVersion = 8CA872B919ACC4F300BA5424 /* Awful 2.0.9.xcdatamodel */;
 			path = Awful.xcdatamodeld;
 			sourceTree = "<group>";
 			versionGroupType = wrapper.xcdatamodel;

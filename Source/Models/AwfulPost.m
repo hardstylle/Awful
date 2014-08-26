@@ -3,6 +3,9 @@
 //  Copyright 2012 Awful Contributors. CC BY-NC-SA 3.0 US https://github.com/Awful/Awful.app
 
 #import "AwfulPost.h"
+@interface AwfulPost ()
+@property (nonatomic, copy) NSDictionary* cachedContentHeights;
+@end
 
 @implementation AwfulPost
 
@@ -16,6 +19,8 @@
 @dynamic author;
 @dynamic editor;
 @dynamic thread;
+@dynamic content;
+@dynamic cachedContentHeights;
 
 - (BOOL)beenSeen
 {
@@ -57,6 +62,42 @@
         post.postID = postID;
     }
     return post;
+}
+
+- (CGFloat)contentHeightForWidth:(CGFloat)width
+{
+    NSNumber *w = [NSNumber numberWithFloat:width];
+    NSNumber *cachedHeight = self.cachedContentHeights[w];
+    if (cachedHeight) return cachedHeight.floatValue;
+    
+    CGRect frame = [self.content
+                    boundingRectWithSize:CGSizeMake(width, 10000)
+                    options:NSStringDrawingUsesLineFragmentOrigin | NSStringDrawingUsesFontLeading
+                    context:nil];
+    
+    NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithDictionary:self.cachedContentHeights];
+    dict[w] = [NSNumber numberWithFloat:frame.size.height];
+    self.cachedContentHeights = dict;
+    
+    return frame.size.height;
+}
+
+- (void)setInnerHTML:(NSString *)innerHTML {
+    [self setPrimitiveValue:innerHTML forKey:@"innerHTML"];
+    NSData *data = [innerHTML dataUsingEncoding:NSUTF8StringEncoding];
+    
+    NSAttributedString __block *content;
+    dispatch_sync(dispatch_get_main_queue(),
+                  ^{
+                      //fixme
+                      //builtin NSAttributedString init with NSHTMLTextDocumentType needs to run on the main thread
+                      //should use DTCoreText on background thread instead
+                      content = [[NSAttributedString alloc] initWithData:data
+                                                                 options:@{NSDocumentTypeDocumentAttribute:NSHTMLTextDocumentType}
+                                                      documentAttributes:nil
+                                                                   error:nil];
+                  });
+    self.content = content;
 }
 
 @end
