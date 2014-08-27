@@ -41,6 +41,20 @@
                                   keyedByAttributeNamed:(NSString *)attributeName
                                 matchingPredicateFormat:(NSString *)format, ... NS_FORMAT_FUNCTION(3, 4);
 
+
+
+/**
+ * Returns a dictionary of managed object ids of the class's entity.
+ *
+ * @param managedObjectContext The context from which to fetch the objects.
+ * @param attributeName        The name of an attribute whose values will be the keys in the returned dictionary.
+ * @param format               A format suitable for +[NSPredicate predicateWithFormat:].
+ */
++ (NSDictionary *)objectIdDictionaryOfAllInManagedObjectContext:(NSManagedObjectContext *)managedObjectContext
+                                          keyedByAttributeNamed:(NSString *)attributeName
+                                        matchingPredicateFormat:(NSString *)format, ... NS_FORMAT_FUNCTION(3, 4);
+
+
 /**
  * Returns YES if there are any objects of the class's entity that match a predicate.
  */

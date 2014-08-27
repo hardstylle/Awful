@@ -45,6 +45,12 @@
 	</dict>
 	<key>default</key>
 	<dict>
+		<key>postTextColor</key>
+		<string>#000000</string>
+		<key>postSeenBackgroundColor</key>
+		<string>#e7e8f1</string>
+		<key>postBackgroundColor</key>
+		<string>#ffffff</string>
 		<key>description</key>
 		<string>Light</string>
 		<key>scrollIndicatorStyle</key>
@@ -355,6 +361,14 @@
 	</dict>
 	<key>YOSPOS</key>
 	<dict>
+		<key>postTextColor</key>
+		<string>#57FF57</string>
+		<key>postSeenBackgroundColor</key>
+		<string>#111111</string>
+		<key>postBackgroundColor</key>
+		<string>#000000</string>
+		<key>postFontName</key>
+		<string>Courier</string>
 		<key>description</key>
 		<string>Green console</string>
 		<key>descriptiveColor</key>

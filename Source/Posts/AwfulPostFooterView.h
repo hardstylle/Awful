@@ -10,5 +10,5 @@
 #import <UIKit/UIKit.h>
 
 @interface AwfulPostFooterView : AwfulPostHeaderFooterView
-@property (nonatomic, weak) AwfulPost* Post;
+
 @end

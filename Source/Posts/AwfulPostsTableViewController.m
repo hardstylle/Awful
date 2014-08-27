@@ -64,6 +64,7 @@
 
 @property (strong,nonatomic) AwfulFetchedResultsControllerDataSource *dataSource;
 
+@property (nonatomic,readwrite) float previousScrollViewYOffset;
 //@property (copy, nonatomic) NSArray *posts;
 @end
 
@@ -629,10 +630,13 @@
 }
 
 
-- (void)didTapUserHeaderWithRect:(CGRect)rect forPostAtIndex:(NSUInteger)postIndex
+- (void)didTapUserActionButton:(UIButton*)sender
 {
+    NSUInteger postIndex = sender.tag;
     AwfulPost *post = self.posts[postIndex + self.hiddenPosts];
     AwfulUser *user = post.author;
+    AwfulPostHeaderView __block *header = (AwfulPostHeaderView*)[self.tableView headerViewForSection:postIndex];
+    
 	AwfulActionViewController *sheet = [AwfulActionViewController new];
     
 	[sheet addItem:[AwfulIconActionItem itemWithType:AwfulIconActionItemTypeUserProfile action:^{
@@ -675,15 +679,21 @@
     if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) {
         [sheet presentInPopoverFromView:self.webView pointingToRegionReturnedByBlock:headerRectBlock];
     } else {
-        [sheet presentFromView:self.webView highlightingRegionReturnedByBlock:headerRectBlock];
+        [sheet presentFromView:self.tableView highlightingRegionReturnedByBlock:^CGRect(UIView *view) {
+
+        return [self.tableView convertRect:header.innerView.frame fromView:header.contentView];
+        }];
     }
 }
 
-- (void)didTapActionButtonWithRect:(CGRect)rect forPostAtIndex:(NSUInteger)postIndex
+- (void)didTapPostActionButton:(id)sender
 {
+    NSUInteger postIndex = ((UIButton*)sender).tag;
     NSAssert(postIndex + self.hiddenPosts < self.posts.count, @"post %lu beyond range (hiding %ld posts)", (unsigned long)postIndex, (long)self.hiddenPosts);
     
     AwfulPost *post = self.posts[postIndex + self.hiddenPosts];
+    AwfulPostFooterView __block *footer = (AwfulPostFooterView*)[self.tableView footerViewForSection:postIndex + self.hiddenPosts];
+    
     NSString *possessiveUsername = [NSString stringWithFormat:@"%@'s", post.author.username];
     if ([post.author.username isEqualToString:[AwfulSettings settings].username]) {
         possessiveUsername = @"Your";
@@ -766,13 +776,11 @@
     
     if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) {
         [sheet presentInPopoverFromView:self.webView pointingToRegionReturnedByBlock:^(UIView *view) {
-            NSString *rectString = [self.webView awful_evalJavaScript:@"ActionButtonRectForPostAtIndex(%lu)", (unsigned long)postIndex];
-            return [self.webView awful_rectForElementBoundingRect:rectString];
+            return footer.frame;
         }];
     } else {
-        [sheet presentFromView:self.webView highlightingRegionReturnedByBlock:^(UIView *view) {
-            NSString *rectString = [self.webView awful_evalJavaScript:@"FooterRectForPostAtIndex(%lu)", (unsigned long)postIndex];
-            return [self.webView awful_rectForElementBoundingRect:rectString];
+        [sheet presentFromView:self.tableView highlightingRegionReturnedByBlock:^(UIView *view) {
+            return [self.tableView convertRect:footer.innerView.frame fromView:footer.contentView];
         }];
     }
 }
@@ -860,9 +868,11 @@
     AwfulPostHeaderView *header = [tableView dequeueReusableHeaderFooterViewWithIdentifier:@"AwfulPostHeader"];
     
     AwfulPost *post = [self.dataSource.fetchedResultsController objectAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:section]];
-    header.user = post.author;
+    header.Post = post;
+    header.action.tag = section;
+    [header.action addTarget:self action:@selector(didTapUserActionButton:)
+            forControlEvents:UIControlEventTouchUpInside];
     return header;
-    self.theme.dictionary
 }
 
 
@@ -873,6 +883,9 @@
     AwfulPost *post = [self.dataSource.fetchedResultsController objectAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:section]];
     
     footer.Post = post;
+    footer.action.tag = section;
+    [footer.action addTarget:self action:@selector(didTapPostActionButton:)
+            forControlEvents:UIControlEventTouchUpInside];
     return footer;
 }
 
@@ -887,10 +900,15 @@
         //NSString *html = [GRMustacheTemplate renderObject:viewModel fromResource:@"Post" bundle:nil error:nil];
 
         cell.textLabel.numberOfLines = 0;
-        cell.textLabel.font = [UIFont systemFontOfSize:12];
         cell.textLabel.lineBreakMode = NSLineBreakByWordWrapping;
         cell.textLabel.attributedText = post.content;
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
+        cell.backgroundColor = [self.theme objectForKeyedSubscript:
+                                post.beenSeen?
+                                @"postSeenBackgroundColor":
+                                @"postBackgroundColor"];
+        cell.textLabel.textColor = [self.theme objectForKeyedSubscript:@"postTextColor"];
+        cell.textLabel.font = [UIFont fontWithName:[self.theme objectForKeyedSubscript:@"postFontName"] size:14];
         return;
     }
     

@@ -20,12 +20,22 @@
 
 @property (copy, nonatomic) NSString *advertisementHTML;
 
+@property (nonatomic,readwrite) BOOL singleUserFilterEnabled;
+
+@property (nonatomic,strong) NSDictionary *existingPostsByID;
+
+@property (nonatomic,strong) NSMutableDictionary *usersByID;
+
+@property (nonatomic,strong) NSMutableDictionary *usersByName;
+
+@property (nonatomic,strong) NSMutableArray *authorScrapers;
 @end
 
 @implementation AwfulPostsPageScraper
 
 - (void)scrape
 {
+    NSLog(@"Beginning post page scrape...");
     [super scrape];
     if (self.error) return;
     
@@ -72,7 +82,7 @@
     HTMLElement *closedImage = [body awful_firstNodeMatchingCachedSelector:@"ul.postbuttons a[href *= 'newreply'] img[src *= 'closed']"];
     self.thread.closed = !!closedImage;
     
-    BOOL singleUserFilterEnabled = !![self.node awful_firstNodeMatchingCachedSelector:@"table.post a.user_jump[title *= 'Remove']"];
+    self.singleUserFilterEnabled = !![self.node awful_firstNodeMatchingCachedSelector:@"table.post a.user_jump[title *= 'Remove']"];
     
     HTMLElement *pagesDiv = [body awful_firstNodeMatchingCachedSelector:@"div.pages"];
     HTMLElement *pagesSelect = [pagesDiv awful_firstNodeMatchingCachedSelector:@"select"];
@@ -108,7 +118,7 @@
     NSMutableArray *postIDs = [NSMutableArray new];
     NSMutableArray *userIDs = [NSMutableArray new];
     NSMutableArray *usernames = [NSMutableArray new];
-    NSMutableArray *authorScrapers = [NSMutableArray new];
+    _authorScrapers = [NSMutableArray new];
     for (HTMLElement *table in postTables) {
         AwfulScanner *scanner = [AwfulScanner scannerWithString:table[@"id"]];
         [scanner scanUpToCharactersFromSet:[NSCharacterSet decimalDigitCharacterSet] intoString:nil];
@@ -121,7 +131,7 @@
         [postIDs addObject:postID];
         
         AwfulAuthorScraper *authorScraper = [AwfulAuthorScraper scrapeNode:table intoManagedObjectContext:self.managedObjectContext];
-        [authorScrapers addObject:authorScraper];
+        [_authorScrapers addObject:authorScraper];
         if (authorScraper.userID) {
             [userIDs addObject:authorScraper.userID];
         }
@@ -129,37 +139,84 @@
             [usernames addObject:authorScraper.username];
         }
     }
-    NSDictionary *fetchedPosts = [AwfulPost dictionaryOfAllInManagedObjectContext:self.managedObjectContext
+    
+    _existingPostsByID = [AwfulPost objectIdDictionaryOfAllInManagedObjectContext:self.managedObjectContext
                                                             keyedByAttributeNamed:@"postID"
                                                           matchingPredicateFormat:@"postID IN %@", postIDs];
-    NSMutableDictionary *usersByID = [[AwfulUser dictionaryOfAllInManagedObjectContext:self.managedObjectContext
+    _usersByID = [[AwfulUser objectIdDictionaryOfAllInManagedObjectContext:self.managedObjectContext
                                                                  keyedByAttributeNamed:@"userID"
                                                                matchingPredicateFormat:@"userID IN %@", userIDs] mutableCopy];
-    NSMutableDictionary *usersByName = [[AwfulUser dictionaryOfAllInManagedObjectContext:self.managedObjectContext
+    _usersByName = [[AwfulUser objectIdDictionaryOfAllInManagedObjectContext:self.managedObjectContext
                                                                    keyedByAttributeNamed:@"username"
                                                                  matchingPredicateFormat:@"userID = nil AND username IN %@", usernames] mutableCopy];
     
-    NSMutableArray *posts = [NSMutableArray new];
+    NSLog(@"Found: %lu existing posts, %lu existing users", _existingPostsByID.count, _usersByID.count);
+    
+    NSMutableArray *posts = [[NSMutableArray alloc] initWithCapacity:postTables.count];
+    for(NSUInteger i=0; i<postTables.count; i++) {
+        [posts  addObject:[NSNull null]];
+    }
     __block AwfulPost *firstUnseenPost;
+    
+    //parse the first unseen post
+    
+    //then the rest
+    dispatch_group_t group = dispatch_group_create();
+
     [postTables enumerateObjectsUsingBlock:^(HTMLElement *table, NSUInteger i, BOOL *stop) {
-        NSString *postID = postIDs[i];
-        AwfulPost *post = fetchedPosts[postID];
-        if (!post) {
-            post = [AwfulPost insertInManagedObjectContext:self.managedObjectContext];
-            post.postID = postID;
-        }
-        [posts addObject:post];
-        
-        post.thread = self.thread;
-        
+          dispatch_group_async(group, dispatch_get_global_queue(0,0), ^{
+              posts[i] = [self parsePostHtml:table atIndex:i onPage:currentPage];
+          });
+    }];
+    
+    dispatch_group_wait(group, DISPATCH_TIME_FOREVER);
+    
+    self.posts = posts;
+    
+    if (firstUnseenPost && !self.singleUserFilterEnabled) {
+        self.thread.seenPosts = firstUnseenPost.threadIndex - 1;
+    }
+    
+    AwfulPost *lastPost = posts.lastObject;
+    if (numberOfPages > 0 && currentPage == numberOfPages && !self.singleUserFilterEnabled) {
+        self.thread.lastPostDate = lastPost.postDate;
+        self.thread.lastPostAuthorName = lastPost.author.username;
+    }
+    
+    if (self.singleUserFilterEnabled) {
+        [self.thread setNumberOfPages:numberOfPages forSingleUser:lastPost.author];
+    } else {
+        self.thread.numberOfPages = numberOfPages;
+    }
+    
+//        NSString *postID = postIDs[i];
+//        AwfulPost *post = fetchedPosts[postID];
+//        if (!post) {
+//            post = [AwfulPost insertInManagedObjectContext:self.managedObjectContext];
+//            post.postID = postID;
+//        }
+//        [posts addObject:post];
+//        
+//        post.thread = self.thread;
+    
+}
+
+- (AwfulPost*)parsePostHtml:(HTMLElement*)postTable atIndex:(NSUInteger)i onPage:(NSUInteger)page
+{
+    NSLog(@"Start async parse of post #%lu", i);
+    NSManagedObjectContext* context = [[NSManagedObjectContext alloc] initWithConcurrencyType:NSPrivateQueueConcurrencyType];
+    context.persistentStoreCoordinator = self.managedObjectContext.persistentStoreCoordinator;
+    
+    AwfulPost *post = [AwfulPost insertInManagedObjectContext:context];
+    
         {{
-            int32_t index = (currentPage - 1) * 40 + (int32_t)i + 1;
-            NSInteger indexAttribute = [table[@"data-idx"] integerValue];
+            int32_t index = (int32_t) (page - 1) * 40 + (int32_t)i + 1;
+            NSInteger indexAttribute = [postTable[@"data-idx"] integerValue];
             if (indexAttribute > 0) {
                 index = (int32_t)indexAttribute;
             }
             if (index > 0) {
-                if (singleUserFilterEnabled) {
+                if (self.singleUserFilterEnabled) {
                     post.singleUserIndex = index;
                 } else {
                     post.threadIndex = index;
@@ -168,11 +225,11 @@
         }}
         
         {{
-            post.ignored = [table hasClass:@"ignored"];
+            post.ignored = [postTable hasClass:@"ignored"];
         }}
         
         {{
-            HTMLElement *postDateCell = [table awful_firstNodeMatchingCachedSelector:@"td.postdate"];
+            HTMLElement *postDateCell = [postTable awful_firstNodeMatchingCachedSelector:@"td.postdate"];
             if (postDateCell) {
                 HTMLTextNode *postDateText = postDateCell.children.lastObject;
                 NSString *postDateString = [postDateText.data stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
@@ -180,74 +237,88 @@
             }
         }}
         
+//        {{
+//            AwfulAuthorScraper *authorScraper = _authorScrapers[i];
+//            AwfulUser *author;
+//            if (authorScraper.userID) {
+//                author = _usersByID[authorScraper.userID];
+//            } else if (authorScraper.username) {
+//                author = _usersByName[authorScraper.username];
+//            }
+//            if (author) {
+//                authorScraper.author = author;
+//            } else {
+//                author = authorScraper.author;
+//            }
+//            if (author) {
+//                post.author = author;
+//                if ([postTable awful_firstNodeMatchingCachedSelector:@"dt.author.op"]) {
+//                    self.thread.author = post.author;
+//                }
+//                HTMLElement *privateMessageLink = [postTable awful_firstNodeMatchingCachedSelector:@"ul.profilelinks a[href*='private.php']"];
+//                post.author.canReceivePrivateMessages = !!privateMessageLink;
+//                if (author.userID) {
+//                    _usersByID[author.userID] = author;
+//                }
+//                if (author.username) {
+//                    _usersByName[author.username] = author;
+//                }
+//            }
+//        }}
+    
         {{
-            AwfulAuthorScraper *authorScraper = authorScrapers[i];
-            AwfulUser *author;
-            if (authorScraper.userID) {
-                author = usersByID[authorScraper.userID];
-            } else if (authorScraper.username) {
-                author = usersByName[authorScraper.username];
-            }
-            if (author) {
-                authorScraper.author = author;
-            } else {
-                author = authorScraper.author;
-            }
-            if (author) {
-                post.author = author;
-                if ([table awful_firstNodeMatchingCachedSelector:@"dt.author.op"]) {
-                    self.thread.author = post.author;
-                }
-                HTMLElement *privateMessageLink = [table awful_firstNodeMatchingCachedSelector:@"ul.profilelinks a[href*='private.php']"];
-                post.author.canReceivePrivateMessages = !!privateMessageLink;
-                if (author.userID) {
-                    usersByID[author.userID] = author;
-                }
-                if (author.username) {
-                    usersByName[author.username] = author;
-                }
-            }
-        }}
-        
-        {{
-            HTMLElement *editButton = [table awful_firstNodeMatchingCachedSelector:@"ul.postbuttons a[href*='editpost.php']"];
+            HTMLElement *editButton = [postTable awful_firstNodeMatchingCachedSelector:@"ul.postbuttons a[href*='editpost.php']"];
             post.editable = !!editButton;
         }}
         
         {{
-            HTMLElement *seenRow = [table awful_firstNodeMatchingCachedSelector:@"tr.seen1"] ?: [table awful_firstNodeMatchingCachedSelector:@"tr.seen2"];
-            if (!seenRow && !firstUnseenPost) {
-                firstUnseenPost = post;
-            }
+            //HTMLElement *seenRow = [postTable awful_firstNodeMatchingCachedSelector:@"tr.seen1"] ?: [postTable //awful_firstNodeMatchingCachedSelector:@"tr.seen2"];
+            //if (!seenRow && !firstUnseenPost) {
+            //    firstUnseenPost = post;
+            //}
         }}
         
         {{
-            HTMLElement *postBodyElement = ([table awful_firstNodeMatchingCachedSelector:@"div.complete_shit"] ?:
-                                            [table awful_firstNodeMatchingCachedSelector:@"td.postbody"]);
+            HTMLElement *postBodyElement = ([postTable awful_firstNodeMatchingCachedSelector:@"div.complete_shit"] ?:
+                                            [postTable awful_firstNodeMatchingCachedSelector:@"td.postbody"]);
             if (postBodyElement) {
                 if (post.innerHTML.length == 0 || !post.ignored) {
-                    post.innerHTML = postBodyElement.innerHTML;   
+                    post.innerHTML = postBodyElement.innerHTML;
                 }
             }
         }}
-    }];
-    self.posts = posts;
     
-    if (firstUnseenPost && !singleUserFilterEnabled) {
-        self.thread.seenPosts = firstUnseenPost.threadIndex - 1;
-    }
+    NSLog(@"Post %lu first save.", i);
+    NSError *error;
+    [context save:&error];
+    if (error) NSLog(@"AwfulPostPageScraper parsePostHtml:AtIndex:onPage Error %@", error);
     
-    AwfulPost *lastPost = posts.lastObject;
-    if (numberOfPages > 0 && currentPage == numberOfPages && !singleUserFilterEnabled) {
-        self.thread.lastPostDate = lastPost.postDate;
-        self.thread.lastPostAuthorName = lastPost.author.username;
-    }
+        {{
+            if (post.innerHTML) {
+            NSData *data = [post.innerHTML dataUsingEncoding:NSUTF8StringEncoding];
+
+            NSAttributedString __block *content;
+                    dispatch_sync(dispatch_get_main_queue(),
+                                  ^{
+                    //                      //fixme
+                    //                      //builtin NSAttributedString init with NSHTMLTextDocumentType needs to run on the main thread
+                    //                      //should use DTCoreText on background thread instead
+
+                                      content = [[NSAttributedString alloc] initWithData:data
+                                                                                 options:@{NSDocumentTypeDocumentAttribute:NSHTMLTextDocumentType}
+                                                                      documentAttributes:nil
+                                                                                   error:nil];
+                                  });
+                }
+        
+            
+        }}
     
-    if (singleUserFilterEnabled) {
-        [self.thread setNumberOfPages:numberOfPages forSingleUser:lastPost.author];
-    } else {
-        self.thread.numberOfPages = numberOfPages;
-    }
+    NSLog(@"Post %lu last save.", i);
+    [context save:&error];
+
+    return post;
+
 }
 
 @end

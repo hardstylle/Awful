@@ -12,7 +12,10 @@
 
 - (id)initWithReuseIdentifier:(NSString*)reuseIdentifier;
 
+@property (nonatomic, weak) AwfulPost* Post;
 @property (nonatomic,strong) UIView* innerView;
+@property (nonatomic,strong) AwfulTheme* theme;
+@property (nonatomic,strong) UIButton *action;
 
 + (NSDateFormatter*)sharedDateFormatter;
 @end
@@ -20,7 +23,6 @@
 
 
 @interface AwfulPostHeaderView : AwfulPostHeaderFooterView
-@property (nonatomic, weak) AwfulUser* User;
 @end
 
 

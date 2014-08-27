@@ -66,6 +66,28 @@
     return [NSDictionary dictionaryWithObjects:objects forKeys:[objects valueForKey:attributeName]];
 }
 
+
++ (NSDictionary *)objectIdDictionaryOfAllInManagedObjectContext:(NSManagedObjectContext *)managedObjectContext
+                                  keyedByAttributeNamed:(NSString *)attributeName
+                                matchingPredicateFormat:(NSString *)format, ...
+{
+    NSParameterAssert(managedObjectContext);
+    NSParameterAssert(attributeName.length > 0);
+    
+    NSFetchRequest *fetchRequest = [NSFetchRequest fetchRequestWithEntityName:self.entityName];
+    fetchRequest.predicate = NSPredicateWithFormatAndArguments(format);
+    NSError *error;
+    NSArray *objects = [managedObjectContext executeFetchRequest:fetchRequest error:&error];
+    if (!objects) {
+        NSLog(@"%s error fetching %@ objects: %@", __PRETTY_FUNCTION__, self.entityName, error);
+    }
+    NSMutableArray *objectIDs = [NSMutableArray new];
+    for(NSManagedObject *obj in objects) {
+        [objectIDs addObject:obj.objectID];
+    }
+    return [NSDictionary dictionaryWithObjects:objectIDs forKeys:[objects valueForKey:attributeName]];
+}
+
 + (BOOL)anyInManagedObjectContext:(NSManagedObjectContext *)managedObjectContext
           matchingPredicateFormat:(NSString *)format, ...
 {

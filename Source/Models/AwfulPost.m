@@ -82,22 +82,22 @@
     return frame.size.height;
 }
 
-- (void)setInnerHTML:(NSString *)innerHTML {
-    [self setPrimitiveValue:innerHTML forKey:@"innerHTML"];
-    NSData *data = [innerHTML dataUsingEncoding:NSUTF8StringEncoding];
-    
-    NSAttributedString __block *content;
-    dispatch_sync(dispatch_get_main_queue(),
-                  ^{
-                      //fixme
-                      //builtin NSAttributedString init with NSHTMLTextDocumentType needs to run on the main thread
-                      //should use DTCoreText on background thread instead
-                      content = [[NSAttributedString alloc] initWithData:data
-                                                                 options:@{NSDocumentTypeDocumentAttribute:NSHTMLTextDocumentType}
-                                                      documentAttributes:nil
-                                                                   error:nil];
-                  });
-    self.content = content;
-}
+//- (void)setInnerHTML:(NSString *)innerHTML {
+//    [self setPrimitiveValue:innerHTML forKey:@"innerHTML"];
+//    NSData *data = [innerHTML dataUsingEncoding:NSUTF8StringEncoding];
+//    
+//    NSAttributedString __block *content;
+//    dispatch_sync(dispatch_get_main_queue(),
+//                  ^{
+//                      //fixme
+//                      //builtin NSAttributedString init with NSHTMLTextDocumentType needs to run on the main thread
+//                      //should use DTCoreText on background thread instead
+//                      content = [[NSAttributedString alloc] initWithData:data
+//                                                                 options:@{NSDocumentTypeDocumentAttribute:NSHTMLTextDocumentType}
+//                                                      documentAttributes:nil
+//                                                                   error:nil];
+//                  });
+//    self.content = content;
+//}
 
 @end
