@@ -139,7 +139,7 @@ class RootViewControllerStack: NSObject, UISplitViewControllerDelegate {
     }
 
     func didAppear() {
-        if !splitViewController.collapsed {
+        if let detailNavigationController = detailNavigationController {
             if detailNavigationController.awful_firstDescendantViewControllerOfClass(AwfulEmptyViewController.self) != nil {
                 splitViewController.awful_showPrimaryViewController()
             }
@@ -156,8 +156,11 @@ class RootViewControllerStack: NSObject, UISplitViewControllerDelegate {
         get { return tabBarController.selectedViewController as UINavigationController }
     }
 
-    private var detailNavigationController: UINavigationController {
-        get { return splitViewController.viewControllers[1] as UINavigationController }
+    private var detailNavigationController: UINavigationController? {
+        get {
+            let viewControllers = splitViewController.viewControllers as [UINavigationController]
+            return viewControllers.count > 1 ? viewControllers[1] : nil
+        }
     }
     
     // MARK: UISplitViewControllerDelegate
@@ -191,13 +194,13 @@ class RootViewControllerStack: NSObject, UISplitViewControllerDelegate {
 
     func splitViewController(splitViewController: UISplitViewController!, showDetailViewController viewController: UIViewController!, sender: AnyObject!) -> Bool {
         if splitViewController.collapsed {
-            primaryNavigationController .pushViewController(viewController, animated: true)
+            primaryNavigationController.pushViewController(viewController, animated: true)
         } else {
             if splitViewController.displayMode != .AllVisible {
                 viewController.navigationItem.leftBarButtonItem = splitViewController.displayModeButtonItem()
             }
 
-            detailNavigationController.setViewControllers([viewController], animated: true)
+            detailNavigationController!.setViewControllers([viewController], animated: true)
             splitViewController.awful_hidePrimaryViewController()
         }
 
@@ -205,7 +208,7 @@ class RootViewControllerStack: NSObject, UISplitViewControllerDelegate {
     }
 
     func splitViewController(splitViewController: UISplitViewController!, willChangeToDisplayMode displayMode: UISplitViewControllerDisplayMode) {
-        let rootViewController = detailNavigationController.viewControllers[0] as UIViewController
+        let rootViewController = detailNavigationController!.viewControllers[0] as UIViewController
         if displayMode == .AllVisible {
             rootViewController.navigationItem.setLeftBarButtonItem(nil, animated: true)
         } else {
