@@ -116,6 +116,7 @@
             NSManagedObject *mainObject = [context objectWithID:objectID];
             [mainObject willAccessValueForKey:nil];
         }
+        context.mergePolicy = NSOverwriteMergePolicy;
         [context mergeChangesFromContextDidSaveNotification:notification];
     }];
 }

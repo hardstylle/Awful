@@ -3,11 +3,15 @@
 //  Copyright 2012 Awful Contributors. CC BY-NC-SA 3.0 US https://github.com/Awful/Awful.app
 
 #import "AwfulPost.h"
+#import <DTCoreText/DTCoreText.h>
+
 @interface AwfulPost ()
 @property (nonatomic, copy) NSDictionary* cachedContentHeights;
+@property (nonatomic, strong) NSAttributedString* content;
 @end
 
 @implementation AwfulPost
+@synthesize content = _content;
 
 @dynamic editable;
 @dynamic ignored;
@@ -19,7 +23,6 @@
 @dynamic author;
 @dynamic editor;
 @dynamic thread;
-@dynamic content;
 @dynamic cachedContentHeights;
 
 - (BOOL)beenSeen
@@ -64,6 +67,7 @@
     return post;
 }
 
+//fixme need to take into account text size
 - (CGFloat)contentHeightForWidth:(CGFloat)width
 {
     NSNumber *w = [NSNumber numberWithFloat:width];
@@ -82,22 +86,37 @@
     return frame.size.height;
 }
 
+- (NSAttributedString*)content
+{
+    if (_content) {
+        //NSLog(@"Accessed cached content.");
+        return _content;
+    }
+    
+    NSData *data = [self.innerHTML dataUsingEncoding:NSUTF8StringEncoding];
+    _content = [[NSAttributedString alloc] initWithHTMLData:data
+                                                options:[self defaultHTMLOptions]
+                                     documentAttributes:nil
+            ];
+    return _content;
+}
+
+//todo - create the cached NSAttributedString content here
+//that way it won't be made on the main thread
+//requires changing content to a transformable property
+//requires fixing the conversion so no fonts/etc are used (core data can't save those)
 //- (void)setInnerHTML:(NSString *)innerHTML {
-//    [self setPrimitiveValue:innerHTML forKey:@"innerHTML"];
-//    NSData *data = [innerHTML dataUsingEncoding:NSUTF8StringEncoding];
 //    
-//    NSAttributedString __block *content;
-//    dispatch_sync(dispatch_get_main_queue(),
-//                  ^{
-//                      //fixme
-//                      //builtin NSAttributedString init with NSHTMLTextDocumentType needs to run on the main thread
-//                      //should use DTCoreText on background thread instead
-//                      content = [[NSAttributedString alloc] initWithData:data
-//                                                                 options:@{NSDocumentTypeDocumentAttribute:NSHTMLTextDocumentType}
-//                                                      documentAttributes:nil
-//                                                                   error:nil];
-//                  });
-//    self.content = content;
 //}
+
+
+- (NSDictionary*)defaultHTMLOptions {
+    return @{
+             DTDefaultFontFamily: @"Helvetica",  //shouldn't use a font here -- should use label's font (from theme)
+             DTDefaultFontSize: @14,             //shouldn't use a size here -- should use label's size (from settings)
+             //DTDefaultStyleSheet: nil,
+             DTUseiOS6Attributes: @YES          //since we're not using DTAttributedTextCell
+             };
+}
 
 @end

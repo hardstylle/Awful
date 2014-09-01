@@ -27,6 +27,10 @@
     [super scrape];
     if (self.error) return;
     
+    if ([self.node isKindOfClass:[HTMLElement class]]) {
+        self.userID = [((HTMLElement*)self.node).attributes[@"class"] stringByReplacingOccurrencesOfString:@"userinfo userid-" withString:@""];
+    }
+    else {
     // Posts and PMs have a "Profile" link we can grab. Profiles, unsurprisingly, don't.
     HTMLElement *profileLink = [self.node awful_firstNodeMatchingCachedSelector:@"ul.profilelinks a[href *= 'userid']"];
     if (profileLink) {
@@ -35,6 +39,7 @@
     } else {
         HTMLElement *userIDInput = [self.node awful_firstNodeMatchingCachedSelector:@"input[name = 'userid']"];
         self.userID = userIDInput[@"value"];
+    }
     }
     HTMLElement *authorTerm = [self.node awful_firstNodeMatchingCachedSelector:@"dt.author"];
     self.username = authorTerm.textContent;
@@ -81,6 +86,14 @@
     }
     if (self.username.length > 0) {
         author.username = self.username;
+    }
+    
+    if ([_author.objectID isTemporaryID])
+    {
+        NSError *error;
+        [self.managedObjectContext save:&error];
+        if (error)
+            NSLog(@"error=%@ %@", error.localizedDescription, error.userInfo);
     }
 }
 

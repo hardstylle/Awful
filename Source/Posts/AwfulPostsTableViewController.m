@@ -178,6 +178,12 @@
                                                                    onPage:self.page
                                                                   andThen:^(NSError *error, NSArray *posts, NSUInteger firstUnreadPost, NSString *advertisementHTML)
                              {
+                                 
+                                 [self clearLoadingMessage];
+                                 [self refetchPosts];
+                                 return;
+                                 
+                                 
                                  __typeof__(self) self = weakSelf;
                                  
                                  // We can get out-of-sync here as there's no cancelling the overall scraping operation. Make sure we've got the right page.
@@ -218,8 +224,8 @@
                                      _scrollToFractionAfterLoading = self.webView.awful_fractionalContentOffset;
                                  }
                                  
-                                 
-                                 [self updateUserInterface];
+                                 [self clearLoadingMessage];
+                                 //[self updateUserInterface];
                                  
                                  AwfulPost *lastPost = self.posts.lastObject;
                                  if (self.thread.seenPosts < lastPost.threadIndex) {
@@ -833,7 +839,7 @@
     [self.tableView registerClass:[AwfulPostFooterView class] forHeaderFooterViewReuseIdentifier:@"AwfulPostFooter"];
     
     self.tableView.delegate = self;
-    self.tableView.sectionFooterHeight = 40;
+    self.tableView.sectionFooterHeight = 33;
     
 //    UILongPressGestureRecognizer *longPress = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(didLongPressOnPostsView:)];
 //    longPress.delegate = self;

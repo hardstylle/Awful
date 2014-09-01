@@ -76,9 +76,9 @@
 
 
 /**
- * The cached NSAttributedString representation of the inner HTML.
+ * The NSAttributedString representation of the inner HTML.
  */
-@property (copy, nonatomic) NSAttributedString* content;
+@property (readonly, nonatomic) NSAttributedString* content;
 
 /*
  * The height of the content for the given width.

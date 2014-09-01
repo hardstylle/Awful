@@ -8,9 +8,11 @@
 #import "AwfulErrorDomain.h"
 #import "AwfulModels.h"
 #import "AwfulScanner.h"
+#import <DTCoreText/DTCoreText.h>
 #import "HTMLNode+CachedSelector.h"
 #import <HTMLReader/HTMLTextNode.h>
 #import "NSURL+QueryDictionary.h"
+#import "NSArray+EnumerateAsync.h"
 
 @interface AwfulPostsPageScraper ()
 
@@ -30,6 +32,7 @@
 
 @property (nonatomic,strong) NSMutableArray *authorScrapers;
 @end
+
 
 @implementation AwfulPostsPageScraper
 
@@ -114,102 +117,103 @@
     
     self.advertisementHTML = [[self.node awful_firstNodeMatchingCachedSelector:@"#ad_banner_user a"] serializedFragment];
     
-    NSArray *postTables = [self.node awful_nodesMatchingCachedSelector:@"table.post"];
-    NSMutableArray *postIDs = [NSMutableArray new];
-    NSMutableArray *userIDs = [NSMutableArray new];
-    NSMutableArray *usernames = [NSMutableArray new];
-    _authorScrapers = [NSMutableArray new];
-    for (HTMLElement *table in postTables) {
-        AwfulScanner *scanner = [AwfulScanner scannerWithString:table[@"id"]];
-        [scanner scanUpToCharactersFromSet:[NSCharacterSet decimalDigitCharacterSet] intoString:nil];
-        NSString *postID = [scanner.string substringFromIndex:scanner.scanLocation];
-        if (postID.length == 0) {
-            NSString *message = @"Post parsing failed; could not find post ID";
-            self.error = [NSError errorWithDomain:AwfulErrorDomain code:AwfulErrorCodes.parseError userInfo:@{ NSLocalizedDescriptionKey: message }];
-            return;
-        }
-        [postIDs addObject:postID];
-        
-        AwfulAuthorScraper *authorScraper = [AwfulAuthorScraper scrapeNode:table intoManagedObjectContext:self.managedObjectContext];
-        [_authorScrapers addObject:authorScraper];
-        if (authorScraper.userID) {
-            [userIDs addObject:authorScraper.userID];
-        }
-        if (authorScraper.username) {
-            [usernames addObject:authorScraper.username];
-        }
-    }
-    
-    _existingPostsByID = [AwfulPost objectIdDictionaryOfAllInManagedObjectContext:self.managedObjectContext
-                                                            keyedByAttributeNamed:@"postID"
-                                                          matchingPredicateFormat:@"postID IN %@", postIDs];
-    _usersByID = [[AwfulUser objectIdDictionaryOfAllInManagedObjectContext:self.managedObjectContext
-                                                                 keyedByAttributeNamed:@"userID"
-                                                               matchingPredicateFormat:@"userID IN %@", userIDs] mutableCopy];
-    _usersByName = [[AwfulUser objectIdDictionaryOfAllInManagedObjectContext:self.managedObjectContext
-                                                                   keyedByAttributeNamed:@"username"
-                                                                 matchingPredicateFormat:@"userID = nil AND username IN %@", usernames] mutableCopy];
-    
-    NSLog(@"Found: %lu existing posts, %lu existing users", _existingPostsByID.count, _usersByID.count);
-    
-    NSMutableArray *posts = [[NSMutableArray alloc] initWithCapacity:postTables.count];
-    for(NSUInteger i=0; i<postTables.count; i++) {
-        [posts  addObject:[NSNull null]];
-    }
-    __block AwfulPost *firstUnseenPost;
-    
-    //parse the first unseen post
-    
-    //then the rest
-    dispatch_group_t group = dispatch_group_create();
 
+    __block NSDictionary *authorIDs = [self parseAuthorNodes];
+    
+    NSArray *postTables = [self.node awful_nodesMatchingCachedSelector:@"table.post"];
+    
+    NSMutableDictionary *posts = [NSMutableDictionary new];
+    //__block AwfulPost *firstUnseenPost;
+
+    //parse posts concurrently and wait for all to finish
+    //fixme Core Data merge conflict when using async
+    //[postTables enumerateObjectsAsyncUsingBlock:^(HTMLElement *table, NSUInteger i, BOOL *stop) {
     [postTables enumerateObjectsUsingBlock:^(HTMLElement *table, NSUInteger i, BOOL *stop) {
-          dispatch_group_async(group, dispatch_get_global_queue(0,0), ^{
-              posts[i] = [self parsePostHtml:table atIndex:i onPage:currentPage];
-          });
+        [NSThread currentThread].name = [NSString stringWithFormat:@"AwfulPost parsePost %@", table.attributes[@"id"]];
+        AwfulPost *post = [self parsePostHtml:table atIndex:i onPage:currentPage usingCachedAuthorIDs:authorIDs];
+        [posts setObject:post forKey:post.postID];
     }];
+
+    self.posts = posts.allValues;
     
-    dispatch_group_wait(group, DISPATCH_TIME_FOREVER);
+    //fixme Can't edit thread here since we're on a different MOC
+//    if (firstUnseenPost && !self.singleUserFilterEnabled) {
+//        self.thread.seenPosts = firstUnseenPost.threadIndex - 1;
+//    }
+//    
+//    AwfulPost *lastPost = self.posts.lastObject;
+//    if (numberOfPages > 0 && currentPage == numberOfPages && !self.singleUserFilterEnabled) {
+//        self.thread.lastPostDate = lastPost.postDate;
+//        self.thread.lastPostAuthorName = lastPost.author.username;
+//    }
+//    
+//    if (self.singleUserFilterEnabled) {
+//        [self.thread setNumberOfPages:numberOfPages forSingleUser:lastPost.author];
+//    } else {
+//        self.thread.numberOfPages = numberOfPages;
+//    }
     
-    self.posts = posts;
-    
-    if (firstUnseenPost && !self.singleUserFilterEnabled) {
-        self.thread.seenPosts = firstUnseenPost.threadIndex - 1;
-    }
-    
-    AwfulPost *lastPost = posts.lastObject;
-    if (numberOfPages > 0 && currentPage == numberOfPages && !self.singleUserFilterEnabled) {
-        self.thread.lastPostDate = lastPost.postDate;
-        self.thread.lastPostAuthorName = lastPost.author.username;
-    }
-    
-    if (self.singleUserFilterEnabled) {
-        [self.thread setNumberOfPages:numberOfPages forSingleUser:lastPost.author];
-    } else {
-        self.thread.numberOfPages = numberOfPages;
-    }
-    
-//        NSString *postID = postIDs[i];
-//        AwfulPost *post = fetchedPosts[postID];
-//        if (!post) {
-//            post = [AwfulPost insertInManagedObjectContext:self.managedObjectContext];
-//            post.postID = postID;
-//        }
-//        [posts addObject:post];
-//        
-//        post.thread = self.thread;
     
 }
 
-- (AwfulPost*)parsePostHtml:(HTMLElement*)postTable atIndex:(NSUInteger)i onPage:(NSUInteger)page
+
+- (NSDictionary*)parseAuthorNodes
 {
-    NSLog(@"Start async parse of post #%lu", i);
+    NSArray* nodes = [self.node awful_nodesMatchingCachedSelector:@"td.userinfo"];
+    
+    //put in dictionary removing duplicates
+    NSMutableDictionary *authorNodes = [NSMutableDictionary new];
+    for(HTMLElement* node in nodes) {
+        NSString* userID = [node.attributes[@"class"] stringByReplacingOccurrencesOfString:@"userinfo userid-" withString:@""];
+        if (![authorNodes.allKeys containsObject:userID])
+            [authorNodes setObject:node forKey:userID];
+    }
+    
+    //parse authors concurrently and wait for all to finish
+    NSMutableDictionary __block *users = [NSMutableDictionary new];
+    
+    [authorNodes.allValues enumerateObjectsAsyncUsingBlock:^(HTMLElement *userinfo, NSUInteger i, BOOL *stop) {
+        [NSThread currentThread].name = [NSString stringWithFormat:@"AwfulUser parseAuthorNode %@", userinfo.attributes[@"class"]];
+           AwfulUser *auth = [self parseAuthorHtml:userinfo];
+        if (!users[auth.userID]) {
+                users[auth.userID] = [auth objectID];
+        }
+    }];
+    
+    return users;
+}
+
+- (AwfulUser*)parseAuthorHtml:(HTMLElement*)authorDiv
+{
+    NSManagedObjectContext* context = [[NSManagedObjectContext alloc] initWithConcurrencyType:NSPrivateQueueConcurrencyType];
+    context.persistentStoreCoordinator = self.managedObjectContext.persistentStoreCoordinator;
+
+    AwfulAuthorScraper* scraper = [[AwfulAuthorScraper alloc] initWithNode:authorDiv managedObjectContext:context];
+    [scraper scrape];
+    return scraper.author;
+}
+
+
+- (AwfulPost*)parsePostHtml:(HTMLElement*)postTable atIndex:(NSUInteger)i onPage:(NSUInteger)page usingCachedAuthorIDs:(NSDictionary*)authorIDs
+{
     NSManagedObjectContext* context = [[NSManagedObjectContext alloc] initWithConcurrencyType:NSPrivateQueueConcurrencyType];
     context.persistentStoreCoordinator = self.managedObjectContext.persistentStoreCoordinator;
     
-    AwfulPost *post = [AwfulPost insertInManagedObjectContext:context];
+    NSString* postID = [postTable.attributes[@"id"] stringByReplacingOccurrencesOfString:@"post" withString:@""];
+    
+    AwfulPost* post;
+//    if (_existingPostsByID[postID])
+//        post = (AwfulPost*)[context existingObjectWithID:_existingPostsByID[postID] error:nil];
+//    else
+        post = [AwfulPost insertInManagedObjectContext:context];
+    
+    AwfulThread *localThread = (AwfulThread*)[context existingObjectWithID:self.thread.objectID error:nil ];
     
         {{
+            post.postID = postID;
+            
+            post.thread = localThread;
+            
             int32_t index = (int32_t) (page - 1) * 40 + (int32_t)i + 1;
             NSInteger indexAttribute = [postTable[@"data-idx"] integerValue];
             if (indexAttribute > 0) {
@@ -237,34 +241,28 @@
             }
         }}
         
-//        {{
-//            AwfulAuthorScraper *authorScraper = _authorScrapers[i];
-//            AwfulUser *author;
-//            if (authorScraper.userID) {
-//                author = _usersByID[authorScraper.userID];
-//            } else if (authorScraper.username) {
-//                author = _usersByName[authorScraper.username];
-//            }
-//            if (author) {
-//                authorScraper.author = author;
-//            } else {
-//                author = authorScraper.author;
-//            }
-//            if (author) {
-//                post.author = author;
+        {{
+            NSString *userID = [[postTable awful_firstNodeMatchingCachedSelector:@"td.userinfo"].attributes[@"class"] stringByReplacingOccurrencesOfString:@"userinfo userid-" withString:@""];
+            NSManagedObjectID *managedID =authorIDs[userID];
+            NSError *error;
+            AwfulUser *author = (AwfulUser*)[context existingObjectWithID:managedID error:&error];
+            if (error)
+                NSLog(@"Error: %@\n%@", [error localizedDescription], [error userInfo]);
+            post.author = author;
+            
 //                if ([postTable awful_firstNodeMatchingCachedSelector:@"dt.author.op"]) {
-//                    self.thread.author = post.author;
+//                    //self.thread.author = post.author;
 //                }
 //                HTMLElement *privateMessageLink = [postTable awful_firstNodeMatchingCachedSelector:@"ul.profilelinks a[href*='private.php']"];
 //                post.author.canReceivePrivateMessages = !!privateMessageLink;
 //                if (author.userID) {
-//                    _usersByID[author.userID] = author;
+//                    //_usersByID[author.userID] = author;
 //                }
 //                if (author.username) {
-//                    _usersByName[author.username] = author;
+//                    //_usersByName[author.username] = author;
 //                }
-//            }
-//        }}
+            
+        }}
     
         {{
             HTMLElement *editButton = [postTable awful_firstNodeMatchingCachedSelector:@"ul.postbuttons a[href*='editpost.php']"];
@@ -288,37 +286,15 @@
             }
         }}
     
-    NSLog(@"Post %lu first save.", i);
+    //NSLog(@"Post %lu first save.", i);
     NSError *error;
     [context save:&error];
-    if (error) NSLog(@"AwfulPostPageScraper parsePostHtml:AtIndex:onPage Error %@", error);
-    
-        {{
-            if (post.innerHTML) {
-            NSData *data = [post.innerHTML dataUsingEncoding:NSUTF8StringEncoding];
-
-            NSAttributedString __block *content;
-                    dispatch_sync(dispatch_get_main_queue(),
-                                  ^{
-                    //                      //fixme
-                    //                      //builtin NSAttributedString init with NSHTMLTextDocumentType needs to run on the main thread
-                    //                      //should use DTCoreText on background thread instead
-
-                                      content = [[NSAttributedString alloc] initWithData:data
-                                                                                 options:@{NSDocumentTypeDocumentAttribute:NSHTMLTextDocumentType}
-                                                                      documentAttributes:nil
-                                                                                   error:nil];
-                                  });
-                }
-        
-            
-        }}
-    
-    NSLog(@"Post %lu last save.", i);
-    [context save:&error];
-
+    if (error)
+        NSLog(@"Post save error: %@ %@", error.localizedDescription, error.userInfo);
     return post;
 
 }
+         
+
 
 @end
